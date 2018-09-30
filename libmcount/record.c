@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <pthread.h>
+#include <sched.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
@@ -719,6 +720,46 @@ void save_trigger_read(struct mcount_thread_data *mtdp,
 	}
 }
 
+void save_watchpoint(struct mcount_thread_data *mtdp,
+		     struct mcount_ret_stack *rstack,
+		     unsigned long watchpoints)
+{
+	uint64_t timestamp;
+
+	timestamp = rstack->end_time ?: rstack->start_time;
+	if (!mtdp->watch.inited) {
+		/*
+		 * Normally watch point event comes before the rstack (record)
+		 * in order to indicate where it's changed precisely.
+		 * But first watch point event needs to come after the first
+		 * record otherwise it'd not shown since 'event-skip' mechanism.
+		 * so add 2(nsec) so that it can be 1 nsec later.
+		 */
+		timestamp += 2;
+		mtdp->watch.inited = true;
+	}
+
+	/* save watch event before normal record */
+	timestamp -= 1;
+
+	if (watchpoints & MCOUNT_WATCH_CPU) {
+		int cpu = sched_getcpu();
+
+		if (mtdp->watch.cpu != cpu && mtdp->nr_events < MAX_EVENT) {
+			struct mcount_event *event;
+			event = &mtdp->event[mtdp->nr_events++];
+
+			event->id    = EVENT_ID_WATCH_CPU;
+			event->time  = timestamp;
+			event->idx   = rstack - mtdp->rstack;
+			event->dsize = 4;
+
+			*(int *)event->data = cpu;
+		}
+		mtdp->watch.cpu = cpu;
+	}
+}
+
 #else
 void *get_argbuf(struct mcount_thread_data *mtdp,
 		 struct mcount_ret_stack *rstack)
@@ -734,6 +775,12 @@ void save_retval(struct mcount_thread_data *mtdp,
 void save_trigger_read(struct mcount_thread_data *mtdp,
 		       struct mcount_ret_stack *rstack,
 		       enum trigger_read_type type)
+{
+}
+
+void save_watchpoint(struct mcount_thread_data *mtdp,
+		     struct mcount_ret_stack *rstack,
+		     unsigned long watchpoints)
 {
 }
 #endif
