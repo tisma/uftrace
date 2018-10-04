@@ -205,6 +205,7 @@ struct opts {
 	char *opt_file;
 	char *script_file;
 	char *diff_policy;
+	char *caller;
 	int mode;
 	int idx;
 	int depth;

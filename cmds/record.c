@@ -69,7 +69,7 @@ static bool can_use_fast_libmcount(struct opts *opts)
 	if (getenv("UFTRACE_FILTER") || getenv("UFTRACE_TRIGGER") ||
 	    getenv("UFTRACE_ARGUMENT") || getenv("UFTRACE_RETVAL") ||
 	    getenv("UFTRACE_PATCH") || getenv("UFTRACE_SCRIPT") ||
-	    getenv("UFTRACE_AUTO_ARGS"))
+	    getenv("UFTRACE_AUTO_ARGS") || getenv("UFTRACE_CALLER"))
 		return false;
 	return true;
 }
@@ -234,6 +234,15 @@ static void setup_child_environ(struct opts *opts, int pfd,
 	if (opts->threshold) {
 		snprintf(buf, sizeof(buf), "%"PRIu64, opts->threshold);
 		setenv("UFTRACE_THRESHOLD", buf, 1);
+	}
+
+	if (opts->caller) {
+		char *caller_str = uftrace_clear_kernel(opts->caller);
+
+		if (caller_str) {
+			setenv("UFTRACE_CALLER", caller_str, 1);
+			free(caller_str);
+		}
 	}
 
 	if (opts->libcall) {
